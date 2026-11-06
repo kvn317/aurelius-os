@@ -1,0 +1,67 @@
+name: Build Aurelius OS ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-aurelius-iso:
+    name: Compile Debian 12 Aurelius Live ISO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        run: |
+          echo "Initial disk space:"
+          df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell /usr/share/swift || true
+          sudo apt-get clean || true
+          echo "Disk space ready for live-build:"
+          df -h
+
+      - name: Compile Aurelius OS ISO in Native Debian 12 Container
+        run: |
+          # Use official Debian 12 container with full privileges for live-build loop mounts
+          docker run --privileged --rm \
+            -v "$GITHUB_WORKSPACE":/workspace \
+            -w /workspace \
+            debian:bookworm bash -e -c '
+              echo "=== 1. Installing build tools in Debian Bookworm ==="
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                live-build \
+                debootstrap \
+                squashfs-tools \
+                xorriso \
+                isolinux \
+                syslinux-common \
+                grub-pc-bin \
+                grub-efi-amd64-bin \
+                mtools \
+                dosfstools \
+                curl \
+                wget \
+                git \
+                debian-archive-keyring \
+                gnupg \
+                ca-certificates
+
+              echo "=== 2. Running Aurelius ISO Builder Script ==="
+              chmod +x build-aurelius-custom-iso.sh
+              ./build-aurelius-custom-iso.sh
+            '
+
+      - name: Upload Bootable ISO Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aurelius-os-12-amd64.hybrid.iso
+          path: |
+            aurelius-os-build/*.iso
+            *.iso
+          retention-days: 14
+          if-no-files-found: warn
