@@ -1,0 +1,5 @@
+aurelius-os-build/
+*.iso
+*.log
+*.tmp
+.DS_Store
